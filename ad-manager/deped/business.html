@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your Campaigns</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{ --bg:#0b0f14; --text:#e7eef7; --muted:#9ca3af; --accent:#3a86ff; }
+    body{ margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; color:var(--text);
+      background: radial-gradient(900px 600px at 0% -10%, #3a86ff22, transparent 60%),
+                  linear-gradient(180deg, var(--bg), var(--bg));
+      min-height:100vh; padding:24px; }
+    .wrap{ max-width:960px; margin:0 auto; }
+    header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    h1{ margin:0; font-size:24px; }
+    .card{ background:#0f172acc; border:1px solid #1f2937; border-radius:16px; padding:20px; margin-bottom:20px; }
+    form#uploadForm{ display:grid; gap:12px; grid-template-columns:1fr auto auto; align-items:center; }
+    form#uploadForm input[type="text"], form#uploadForm input[type="file"]{
+      padding:10px 12px; border-radius:10px; border:1px solid #344256; background:#0b1220; color:#fff;
+    }
+    form#uploadForm button{
+      background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer;
+    }
+    .hint{ color:var(--muted); font-size:13px; margin-top:8px; }
+    .ok{ color:#86efac; } .bad{ color:#fca5a5; } .info{ color:#93c5fd; }
+    ul#campList{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+    li.camp{ display:flex; justify-content:space-between; align-items:center; background:#0c1527; border:1px solid #1f2937; border-radius:12px; padding:12px; }
+    .status{ font-size:12px; color:#9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Ad Manager — Business</h1>
+      <form id="logoutForm" action="/auth/logout" method="post"><button type="submit">Log out</button></form>
+    </header>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px">Create campaign</h2>
+      <form id="uploadForm" method="post" action="/api/campaigns/upload" enctype="multipart/form-data">
+        <input type="text" name="title" id="title" placeholder="Campaign title" required />
+        <input type="file" name="file" id="file" accept="image/*,video/*" required />
+        <button type="submit">Upload</button>
+      </form>
+      <div id="msg" class="hint"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px">Your campaigns</h2>
+      <ul id="campList"></ul>
+    </section>
+  </div>
+
+  <script>
+    // Clean querystring so it doesn't leak into later actions
+    Promise.resolve().then(() => { if (location.search) history.replaceState(null, "", location.pathname); });
+
+    const msg = document.getElementById("msg");
+    const setMsg = (t,cls="info") => { msg.textContent = t; msg.className = "hint " + cls; };
+
+    async function fetchList(){
+      const r = await fetch("/api/campaigns/list", { credentials: "same-origin" });
+      const data = await r.json().catch(()=>[]);
+      const ul = document.getElementById("campList");
+      ul.innerHTML = "";
+      if (!Array.isArray(data) || !data.length){
+        const li = document.createElement("li");
+        li.className = "camp";
+        li.innerHTML = `<span class="status">No campaigns yet.</span>`;
+        ul.appendChild(li);
+        return;
+      }
+      for (const c of data){
+        const li = document.createElement("li");
+        li.className = "camp";
+        li.innerHTML = `
+          <div>
+            <div><strong>${c.title}</strong></div>
+            <div class="status">Status: ${c.status}</div>
+          </div>
+          <div class="status">${new Date(c.created_at).toLocaleString()}</div>
+        `;
+        ul.appendChild(li);
+      }
+    }
+
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); // stop navigation to JSON
+      const fd = new FormData(e.currentTarget);
+      setMsg("Uploading…");
+      try{
+        const r = await fetch("/api/campaigns/upload", { method: "POST", body: fd, credentials: "same-origin" });
+        const out = await r.json().catch(()=> ({}));
+        if (!r.ok) throw new Error(out.error || "Upload failed");
+        setMsg("Uploaded successfully. Awaiting approval.", "ok");
+        e.currentTarget.reset();
+        fetchList();
+      }catch(err){
+        setMsg(err.message || "Upload failed", "bad");
+      }
+    });
+
+    fetchList();
+  </script>
+</body>
+</html>

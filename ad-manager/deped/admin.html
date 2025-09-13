@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin • Ad Manager</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <main class="card dashboard">
+    <h2>Pending Campaigns</h2>
+    <div id="list"></div>
+  </main>
+
+  <script>
+    const list = document.getElementById("list");
+
+    async function load() {
+      const res = await fetch("/api/ads/pending", { credentials: "include" });
+      if (!res.ok) {
+        if (res.status === 403) return (location.href = "/login.html");
+        const err = await res.text(); throw new Error(err);
+      }
+      const items = await res.json();
+      list.innerHTML = "";
+      (items || []).forEach(it => {
+        const d = document.createElement("div");
+        d.className = "ad-card";
+        d.innerHTML = `
+          <div>
+            <h3>${it.title || "Untitled"}</h3>
+            <div class="small">${it.company_name} • ${it.email}</div>
+          </div>
+          <div class="ad-actions">
+            <button class="btn btn-primary" data-id="${it.id}" data-action="approve">Approve</button>
+            <button class="btn btn-secondary" data-id="${it.id}" data-action="deny">Deny</button>
+            <button class="btn btn-secondary" data-id="${it.id}" data-action="del">Delete</button>
+          </div>`;
+        list.appendChild(d);
+      });
+    }
+
+    list.addEventListener("click", async (ev) => {
+      if (ev.target.tagName !== "BUTTON") return;
+      const id = ev.target.dataset.id;
+      const action = ev.target.dataset.action;
+
+      if (action === "approve") await fetch(`/api/ads/${id}/approve`, { method: "POST", credentials: "include" });
+      if (action === "deny")    await fetch(`/api/ads/${id}/deny`,    { method: "POST", credentials: "include" });
+      if (action === "del")     await fetch(`/api/ads/${id}`,         { method: "DELETE", credentials: "include" });
+      load();
+    });
+
+    load().catch(e => console.error(e));
+  </script>
+</body>
+</html>

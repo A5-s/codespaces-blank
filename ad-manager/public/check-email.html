@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check your email</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{ --bg:#0b0f14; --card:#111827; --text:#e7eef7; --muted:#9ca3af; --accent:#3a86ff; }
+    body{ margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; color:var(--text);
+          background: radial-gradient(900px 600px at 0% -10%, #3a86ff22, transparent 60%),
+                      linear-gradient(180deg, var(--bg), var(--bg));
+          display:grid; place-items:center; min-height:100vh; padding:24px; }
+    .card{ width:min(100%,560px); background:#0f172aCC; backdrop-filter: blur(10px);
+           border:1px solid #1f2937; border-radius:16px; padding:28px; }
+    h1{ margin:0 0 6px; font-size:24px; }
+    p{ color:var(--muted); }
+    .email{ color:#fff; font-weight:600 }
+    form{ margin-top:18px; display:flex; gap:10px; }
+    input[type="email"]{ flex:1; padding:12px 14px; border-radius:10px; border:1px solid #344256; background:#0b1220; color:#fff; }
+    button{ background:var(--accent); color:#fff; border:none; border-radius:10px; padding:12px 16px; font-weight:600; cursor:pointer; }
+    .note{ margin-top:12px; color:#9ca3af; font-size:14px; }
+    .ok{ color:#86efac; font-size:14px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Check your email</h1>
+    <p>We sent a verification link to <span id="addr" class="email"></span>. Click the link to activate your account.</p>
+
+    <form method="post" action="/auth/resend-verification">
+      <input type="email" name="email" id="email" placeholder="you@example.com" required />
+      <button type="submit">Resend link</button>
+    </form>
+    <p class="note">Didn’t get it? Check spam, or resend above.</p>
+    <p id="sent" class="ok" style="display:none">Verification email resent.</p>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const email = params.get("email") || "";
+    const sent = params.get("sent");
+    document.getElementById("addr").textContent = email;
+    document.getElementById("email").value = email;
+    if (sent) document.getElementById("sent").style.display = "block";
+  </script>
+</body>
+</html>

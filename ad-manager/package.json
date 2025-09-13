@@ -1,0 +1,28 @@
+{
+  "name": "ad-manager",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "create-admin": "node scripts/create_admin.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^6.11.2",
+    "googleapis": "^159.0.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1",
+    "open": "^10.2.0",
+    "pg": "^8.12.0",
+    "uuid": "^9.0.1"
+  }
+}
