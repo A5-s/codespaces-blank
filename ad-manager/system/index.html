@@ -1,1 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Campaigns</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{ --bg:#0b0f14; --text:#e7eef7; --muted:#9ca3af; --accent:#3a86ff; }
+    *{ box-sizing:border-box }
+    body{
+      margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; color:var(--text);
+      background:
+        radial-gradient(900px 600px at 0% -10%, #3a86ff22, transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg));
+      min-height:100vh; padding:24px;
+    }
+    .wrap{ max-width:1100px; margin:0 auto; }
+    header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    h1{ margin:0; font-size:24px; letter-spacing:-.01em; }
+    a.logout{ color:#fff; background:#ef4444; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:600; border:1px solid #7f1d1d; }
+    .tabs{ display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+    .tab{ padding:8px 12px; border:1px solid #1f2937; border-radius:10px; cursor:pointer; background:#0f172acc; }
+    .tab:hover{ border-color:#2b3a52 }
+    .tab.active{ outline:2px solid var(--accent); }
+    .card{ background:#0f172acc; border:1px solid #1f2937; border-radius:16px; padding:20px; margin-bottom:20px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .msg{ margin:10px 0; font-size:14px; }
+    .ok{ color:#86efac } .bad{ color:#fca5a5 } .info{ color:#93c5fd }
+    table{ width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td{ border-bottom:1px solid #1f2937; padding:10px; text-align:left; vertical-align:middle; }
+    th{ color:#cbd5e1; font-weight:600; }
+    button{ background:var(--accent); color:#fff; border:none; border-radius:8px; padding:8px 12px; font-weight:600; cursor:pointer; }
+    button:hover{ filter:brightness(1.05) }
+    .danger{ background:#ef4444; }
+    .actions{ display:flex; gap:8px; }
+    img.thumb{ max-height:60px; border-radius:6px; border:1px solid #1f2937; cursor:zoom-in; }
+    /* Modal */
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:50; }
+    .modal.open{ display:flex; }
+    .modal img{ max-width:95vw; max-height:90vh; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.6); }
+    .modal .close{ position:absolute; top:20px; right:20px; background:#111827; padding:8px 10px; border-radius:8px; border:1px solid #374151; cursor:pointer; color:#e5e7eb; }
+    /* Admin upload form */
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    input[type="text"], input[type="email"], input[type="file"]{
+      padding:10px 12px; border-radius:10px; border:1px solid #344256; background:#0b1220; color:#fff;
+    }
+    @media (max-width: 640px){
+      th:nth-child(3), td:nth-child(3){ display:none }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>SYSTEM — Campaigns</h1>
+      <a class="logout" href="../logout">Log out</a>
+    </header>
 
+    <div class="tabs">
+      <button class="tab active" data-tab="pending">Pending</button>
+      <button class="tab" data-tab="approved">Approved</button>
+      <button class="tab" data-tab="upload">SYSTEM Upload</button>
+    </div>
+
+    <section id="tab-pending" class="card">
+      <div id="msgPending" class="msg"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Preview</th>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Scheduled</th>
+            <th>Submitted</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rowsPending"></tbody>
+      </table>
+    </section>
+
+    <section id="tab-approved" class="card" style="display:none">
+      <div id="msgApproved" class="msg"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Preview</th>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Scheduled</th>
+            <th>Approved</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rowsApproved"></tbody>
+      </table>
+    </section>
+
+    <section id="tab-upload" class="card" style="display:none">
+      <h3 style="margin:0 0 10px">Upload sys ad</h3>
+      <div id="msgUpload" class="msg"></div>
+      <form id="adminUploadForm" method="post" action="/api/admin/upload" enctype="multipart/form-data">
+        <div class="row">
+          <input type="text" name="title" placeholder="Title" required />
+          <input type="email" name="user_email" placeholder="(Optional) Attribute to business email" />
+          <input type="file" name="file" accept="image/*,video/*" required />
+          <button type="submit">Upload</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="imgModal" class="modal" role="dialog" aria-modal="true" aria-label="Image preview">
+    <button class="close" aria-label="Close">Close</button>
+    <img id="modalImg" src="" alt="">
+  </div>
+
+  <script>
+    if (location.search) history.replaceState(null, "", location.pathname);
+
+    // Tabs
+    const tabs = document.querySelectorAll(".tab");
+    const sections = {
+      pending: document.getElementById("tab-pending"),
+      approved: document.getElementById("tab-approved"),
+      upload: document.getElementById("tab-upload"),
+    };
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      const name = t.dataset.tab;
+      for (const k in sections) sections[k].style.display = (k === name) ? "" : "none";
+      if (name === "pending") loadPending();
+      if (name === "approved") loadApproved();
+    }));
+
+    const rowsPending = document.getElementById("rowsPending");
+    const rowsApproved = document.getElementById("rowsApproved");
+    const msgPending = document.getElementById("msgPending");
+    const msgApproved = document.getElementById("msgApproved");
+
+    function setMsg(el, t, cls="info"){ el.textContent = t; el.className = "msg " + cls; }
+
+    async function api(path, opt = {}) {
+      const r = await fetch(path, { credentials: "same-origin", ...opt });
+      if (r.status === 401 || r.status === 403) {
+        location.href = "/login.html?err=invalid"; return null;
+      }
+      return r;
+    }
+
+    function rowHTML(c, showApproveDeny=false, showDelete=false){
+      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(c.file_url || "");
+      const preview = isImg
+        ? `<img class="thumb" src="${c.file_url}" data-full="${c.file_url}" alt="">`
+        : `<a href="${c.file_url}" target="_blank">Open</a>`;
+      const acts = [];
+      if (showApproveDeny){
+        acts.push(`<button data-act="approve" data-id="${c.id}">Approve</button>`);
+        acts.push(`<button class="danger" data-act="deny" data-id="${c.id}">Deny</button>`);
+      }
+      if (showDelete){
+        acts.push(`<button class="danger" data-act="delete" data-id="${c.id}">Remove</button>`);
+      }
+      const schedFrom = c.scheduled_from ? new Date(c.scheduled_from).toLocaleString() : "—";
+      const schedTo   = c.scheduled_to   ? new Date(c.scheduled_to).toLocaleString()   : "—";
+      return `
+        <tr>
+          <td>${preview}</td>
+          <td>${c.title}</td>
+          <td>${c.company_name || ""}<br><span style="color:#9ca3af;font-size:12px">${c.email || ""}</span></td>
+          <td>${schedFrom} → ${schedTo}</td>
+          <td>${new Date(c.created_at).toLocaleString()}</td>
+          <td class="actions">${acts.join(" ")}</td>
+        </tr>`;
+    }
+
+    async function loadPending(){
+      setMsg(msgPending, "Loading pending…", "info");
+      const r = await api("/api/admin/pending"); if (!r) return;
+      const data = await r.json().catch(()=>[]);
+      rowsPending.innerHTML = "";
+      if (!data.length){ setMsg(msgPending, "No pending campaigns.", "info"); return; }
+      setMsg(msgPending, "");
+      rowsPending.innerHTML = data.map(c => rowHTML(c, true, false)).join("");
+    }
+
+    async function loadApproved(){
+      setMsg(msgApproved, "Loading approved…", "info");
+      const r = await api("/api/admin/approved"); if (!r) return;
+      const data = await r.json().catch(()=>[]);
+      rowsApproved.innerHTML = "";
+      if (!data.length){ setMsg(msgApproved, "No approved campaigns.", "info"); return; }
+      setMsg(msgApproved, "");
+      rowsApproved.innerHTML = data.map(c => rowHTML(c, false, true)).join("");
+    }
+
+    document.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      let url = null;
+      if (act === "approve") url = `/api/admin/${id}/approve`;
+      if (act === "deny")    url = `/api/admin/${id}/deny`;
+      if (act === "delete")  url = `/api/admin/${id}/delete`;
+
+      const r = await api(url, { method: "POST" }); if (!r) return;
+      const out = await r.json().catch(()=> ({}));
+      if (!r.ok) {
+        if (sections.pending.style.display !== "none") setMsg(msgPending, out.error || "Action failed", "bad");
+        else setMsg(msgApproved, out.error || "Action failed", "bad");
+        return;
+      }
+      if (sections.pending.style.display !== "none") { setMsg(msgPending, `${act}d`, "ok"); loadPending(); }
+      else { setMsg(msgApproved, `${act === "delete" ? "Removed" : act + "d"}`, "ok"); loadApproved(); }
+    });
+
+    const modal = document.getElementById("imgModal");
+    const modalImg = document.getElementById("modalImg");
+    const closeBtn = modal.querySelector(".close");
+
+    document.addEventListener("click", (e) => {
+      const img = e.target.closest("img.thumb");
+      if (img) {
+        const src = img.getAttribute("data-full") || img.src;
+        modalImg.src = src;
+        modal.classList.add("open");
+      }
+    });
+    closeBtn.addEventListener("click", () => modal.classList.remove("open"));
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("open"); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("open"); });
+
+    const adminUploadForm = document.getElementById("adminUploadForm");
+    const msgUpload = document.getElementById("msgUpload");
+    adminUploadForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setMsg(msgUpload, "Uploading…", "info");
+      const fd = new FormData(adminUploadForm);
+      const r = await api("/api/admin/upload", { method: "POST", body: fd });
+      if (!r) return;
+      const out = await r.json().catch(()=> ({}));
+      if (!r.ok) return setMsg(msgUpload, out.error || "Upload failed", "bad");
+      setMsg(msgUpload, "Uploaded & approved.", "ok");
+      adminUploadForm.reset();
+      if (sections.approved.style.display !== "none") loadApproved();
+    });
+
+    loadPending();
+  </script>
+</body>
+</html>
