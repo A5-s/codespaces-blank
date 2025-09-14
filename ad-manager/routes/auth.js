@@ -173,7 +173,7 @@ router.post("/login-web", async (req, res) => {
     const token = signSession(user);
     res.cookie("session", token, devCookie);
 
-    return res.redirect(user.role === "admin" ? "/admin" : "/business");
+    return res.redirect(user.role === "admin" ? "/admin" : "system" ? "/system" : "/business");
   } catch (e) {
     console.error(e);
     return res.redirect("/login.html?err=server");
