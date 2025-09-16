@@ -10,8 +10,11 @@
   .stage{ position:fixed; inset:0; display:grid; place-items:center; background:#000; }
   .hidden{ display:none !important; }
   img, video{ max-width:100vw; max-height:100vh; object-fit:contain; background:#000; }
-  .overlay{ position:fixed; left:16px; bottom:16px; font-size:14px; color:var(--muted); }
-  .error{ position:fixed; top:16px; left:16px; color:#fca5a5; font-size:14px; }
+  .overlay{ position:fixed; left:12px; bottom:12px; font-size:13px; color:var(--muted); }
+  .chrome{ position:fixed; right:12px; top:12px; display:flex; gap:6px; }
+  .btn{ background:#0b1220; border:1px solid #1f2937; color:#e5e7eb; padding:6px 10px; border-radius:8px; cursor:pointer; font-size:12px; }
+  .btn:hover{ border-color:#3a86ff }
+  .error{ position:fixed; top:12px; left:12px; color:#fca5a5; font-size:13px; }
 </style>
 </head>
 <body>
@@ -21,29 +24,45 @@
   </div>
   <div id="err" class="error"></div>
   <div class="overlay" id="meta"></div>
+  <div class="chrome">
+    <button id="prev" class="btn">Prev Display</button>
+    <div id="lab" class="btn" style="pointer-events:none"></div>
+    <button id="next" class="btn">Next Display</button>
+  </div>
 
 <script>
 (async function(){
-  const FEED_URL = "/api/player/feed";
+  const urlParams = new URLSearchParams(location.search);
+  let display = parseInt(urlParams.get("display") || "1", 10);
+  if (![1,2,3].includes(display)) display = 1;
+
+  const FEED = (d) => `/api/player/feed?display=${d}`;
   const img = document.getElementById("img");
   const vid = document.getElementById("vid");
   const meta = document.getElementById("meta");
   const err = document.getElementById("err");
+  const lab = document.getElementById("lab");
+  const prevBtn = document.getElementById("prev");
+  const nextBtn = document.getElementById("next");
 
   let playlist = [];
-  let idx = 0;
+  let idx = 0, feedURL = FEED(display);
+
+  const setLab = () => lab.textContent = `Display ${display}`;
+
+  prevBtn.onclick = async () => { display = display === 1 ? 3 : (display-1); setLab(); feedURL = FEED(display); await loadFeed(); idx = 0; };
+  nextBtn.onclick = async () => { display = display === 3 ? 1 : (display+1); setLab(); feedURL = FEED(display); await loadFeed(); idx = 0; };
+
+  setLab();
 
   async function loadFeed(){
     try{
       err.textContent = "";
-      const r = await fetch(FEED_URL, { cache: "no-store" });
+      const r = await fetch(feedURL, { cache: "no-store" });
       if(!r.ok) throw new Error("Feed HTTP " + r.status);
       const data = await r.json();
       playlist = Array.isArray(data.playlist) ? data.playlist : [];
-      if (playlist.length === 0) {
-        err.textContent = "No active approved ads.";
-      }
-      idx = 0;
+      if (playlist.length === 0) err.textContent = "No active approved ads.";
     }catch(e){
       err.textContent = "Failed to load feed: " + (e.message || e);
     }
@@ -52,7 +71,7 @@
   function showMeta(item){
     const from = item.scheduled_from ? new Date(item.scheduled_from).toLocaleString() : "—";
     const to   = item.scheduled_to   ? new Date(item.scheduled_to).toLocaleString()   : "—";
-    meta.textContent = `${item.title || ""} • ${from} → ${to}`;
+    meta.textContent = `D${display} • ${item.title || ""} • ${from} → ${to}`;
   }
 
   function hideBoth(){
@@ -65,7 +84,7 @@
 
   async function playLoop(){
     if (playlist.length === 0) {
-      await new Promise(r => setTimeout(r, 8000));
+      await new Promise(r => setTimeout(r, 6000));
       await loadFeed();
       return playLoop();
     }
@@ -85,27 +104,22 @@
       vid.src = item.url;
       vid.currentTime = 0;
       vid.classList.remove("hidden");
-      // attempt autoplay; if blocked, mute+play
       try { await vid.play(); } catch { vid.muted = true; try{ await vid.play(); }catch{} }
       await new Promise(r => {
-        let to = setTimeout(()=>r(), 120000); // safety 2 min cap
+        let to = setTimeout(()=>r(), 120000);
         const done = () => { clearTimeout(to); r(); };
         vid.onended = done;
         vid.onerror = done;
       });
     }
 
-    // Periodically refresh the feed (e.g. every full cycle)
-    if (idx % playlist.length === 0) {
-      await loadFeed();
-    }
+    if (idx % playlist.length === 0) await loadFeed();
     return playLoop();
   }
 
   await loadFeed();
   playLoop();
 
-  // Make sure the cursor is hidden on Pi (also install 'unclutter' there)
   document.body.style.cursor = "none";
 })();
 </script>
