@@ -4,14 +4,15 @@ import pool from "../db.js";
 const router = express.Router();
 
 router.get("/feed", async (req, res) => {
-  const display = parseInt(req.query.display || "1", 10);
+  const display = Math.max(1, Math.min(3, parseInt(req.query.display || "1", 10)));
   const limit = Math.min(parseInt(req.query.limit || "100", 10), 200);
 
   try {
-    const ovr = await pool.query(
+    // Active override (optional)
+    const { rows: ovrRows } = await pool.query(
       `
       select do.display_id, do.campaign_id,
-             c.title, c.file_url, c.scheduled_from, c.scheduled_to, c.created_at
+             c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
         from public.display_overrides do
         join public.campaigns c on c.id = do.campaign_id
        where do.display_id = $1
@@ -24,32 +25,36 @@ router.get("/feed", async (req, res) => {
       `,
       [display]
     );
-    const override = ovr.rows[0] || null;
+    const override = ovrRows[0] || null;
 
-    const q = await pool.query(
+    const { rows } = await pool.query(
       `
-      with agg as (
-        select
-          c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to, c.created_at,
-          count(ct.display_id)              as target_count,
-          count(*) filter (where ct.display_id = $1) as match_count
+      select c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
         from public.campaigns c
-        left join public.campaign_targets ct on ct.campaign_id = c.id
-        where c.status = 'approved'
-          and (c.scheduled_from is null or c.scheduled_from <= now())
-          and (c.scheduled_to   is null or c.scheduled_to   >= now())
-        group by c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to, c.created_at
-      )
-      select id, title, file_url, scheduled_from, scheduled_to, created_at
-      from agg
-      where (target_count = 0 or match_count > 0)
-      order by coalesce(scheduled_from, created_at) asc
-      limit $2
+       where c.status = 'approved'
+         and (c.scheduled_from is null or c.scheduled_from <= now())
+         and (c.scheduled_to   is null or c.scheduled_to   >= now())
+         and (
+              -- global if no targets exist
+              not exists (
+                select 1 from public.campaign_targets ct
+                 where ct.campaign_id = c.id
+              )
+              -- or explicitly targeted to this display
+              or exists (
+                select 1 from public.campaign_targets ct
+                 where ct.campaign_id = c.id
+                   and ct.display_id = $1
+              )
+         )
+       order by coalesce(c.scheduled_from, now()) asc
+       limit $2
       `,
       [display, limit]
     );
 
-    const makeItem = (r) => {
+    // Build playlist
+    const toItem = (r) => {
       const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(r.file_url || "");
       return {
         id: r.id,
@@ -58,13 +63,13 @@ router.get("/feed", async (req, res) => {
         type: isImage ? "image" : "video",
         duration: isImage ? 10 : null,
         scheduled_from: r.scheduled_from,
-        scheduled_to: r.scheduled_to,
+        scheduled_to: r.scheduled_to
       };
     };
+    const playlist = rows.map(toItem);
 
-    const playlist = q.rows.map(makeItem);
     if (override) {
-      const top = makeItem(override);
+      const top = toItem(override);
       if (!playlist.length || playlist[0].id !== top.id) playlist.unshift(top);
     }
 
@@ -73,6 +78,27 @@ router.get("/feed", async (req, res) => {
     console.error("[player/feed] SQL error:", e);
     res.status(500).json({ error: "feed_failed" });
   }
+});
+
+router.get("/diag", async (_req, res) => {
+  const out = {};
+  async function tryQuery(name, sql) {
+    try {
+      const r = await pool.query(sql);
+      out[name] = { ok: true, rows: r.rows.length };
+    } catch (e) {
+      out[name] = { ok: false, error: String(e.message || e) };
+    }
+  }
+  await tryQuery("campaigns_exists", "select 1 from public.campaigns limit 1");
+  await tryQuery("campaigns_columns", `
+    select column_name from information_schema.columns
+    where table_schema='public' and table_name='campaigns' 
+      and column_name in ('id','title','file_url','status','scheduled_from','scheduled_to')`);
+  await tryQuery("campaign_targets_exists", "select 1 from public.campaign_targets limit 1");
+  await tryQuery("display_overrides_exists", "select 1 from public.display_overrides limit 1");
+  await tryQuery("displays_exists", "select 1 from public.displays limit 1");
+  res.json(out);
 });
 
 export default router;
