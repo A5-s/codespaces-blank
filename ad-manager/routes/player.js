@@ -8,7 +8,6 @@ router.get("/feed", async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || "100", 10), 200);
 
   try {
-    // Active override (optional)
     const { rows: ovrRows } = await pool.query(
       `
       select do.display_id, do.campaign_id,
