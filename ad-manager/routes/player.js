@@ -26,31 +26,31 @@ router.get("/feed", async (req, res) => {
     );
     const override = ovrRows[0] || null;
 
-    const { rows } = await pool.query(
-      `
-      select c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
-        from public.campaigns c
-       where c.status = 'approved'
-         and (c.scheduled_from is null or c.scheduled_from <= now())
-         and (c.scheduled_to   is null or c.scheduled_to   >= now())
-         and (
-              -- global if no targets exist
-              not exists (
-                select 1 from public.campaign_targets ct
-                 where ct.campaign_id = c.id
-              )
-              -- or explicitly targeted to this display
-              or exists (
-                select 1 from public.campaign_targets ct
-                 where ct.campaign_id = c.id
-                   and ct.display_id = $1
-              )
-         )
-       order by coalesce(c.scheduled_from, now()) asc
-       limit $2
-      `,
-      [display, limit]
-    );
+const { rows } = await pool.query(
+  `
+  select c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
+    from public.campaigns c
+   where c.status = 'approved'
+     and (c.scheduled_from is null or c.scheduled_from <= now())
+     and (c.scheduled_to   is null or c.scheduled_to   >= now())
+     and (
+          -- global if no targets exist
+          not exists (
+            select 1 from public.campaign_targets ct
+             where ct.campaign_id::text = c.id::text
+          )
+          -- or explicitly targeted to this display
+          or exists (
+            select 1 from public.campaign_targets ct
+             where ct.campaign_id::text = c.id::text
+               and ct.display_id = $1
+          )
+     )
+   order by coalesce(c.scheduled_from, now()) asc
+   limit $2
+  `,
+  [display, limit]
+);
 
     // Build playlist
     const toItem = (r) => {
