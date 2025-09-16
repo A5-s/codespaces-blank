@@ -1,4 +1,3 @@
-// routes/admin.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import pool from "../db.js";
@@ -26,7 +25,6 @@ function requireAdmin(req, res, next) {
   }
 }
 
-// Pending with schedule
 router.get("/pending", requireAdmin, async (_req, res) => {
   try {
     const { rows } = await pool.query(
@@ -45,7 +43,6 @@ router.get("/pending", requireAdmin, async (_req, res) => {
   }
 });
 
-// Approved with schedule
 router.get("/approved", requireAdmin, async (_req, res) => {
   try {
     const { rows } = await pool.query(
@@ -94,7 +91,6 @@ router.post("/:id/deny", requireAdmin, async (req, res) => {
   }
 });
 
-// Admin upload (auto-approved)
 router.post("/upload", requireAdmin, upload.single("file"), async (req, res) => {
   try {
     const title = String(req.body.title || "").trim();
@@ -132,19 +128,17 @@ router.post("/upload", requireAdmin, upload.single("file"), async (req, res) => 
   }
 });
 
-// Remove approved (hard delete + storage cleanup)
 router.post("/:id/delete", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { rows } = await pool.query(`select file_url from campaigns where id=$1`, [id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-    // derive key from public URL
     let fileUrl = rows[0].file_url || "";
     let key = null;
     const parts = fileUrl.split("/object/public/");
     if (parts[1]) {
-      const after = parts[1]; // <bucket>/<key>
+      const after = parts[1];
       const idx = after.indexOf("/");
       if (idx !== -1) key = after.slice(idx + 1);
     }
@@ -156,6 +150,36 @@ router.post("/:id/delete", requireAdmin, async (req, res) => {
   } catch (e) {
     console.error("[admin/delete]", e);
     res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+router.post("/send", requireAdmin, async (req, res) => {
+  try {
+    const campaign_id = Number(req.body.campaign_id);
+    const display_id = Number(req.body.display_id);
+    const minutes = Math.max(1, Math.min(60, Number(req.body.minutes || 10)));
+
+    const ok = await pool.query(
+      `select 1 from campaigns
+        where id=$1 and status='approved'
+          and (scheduled_from is null or scheduled_from <= now())
+          and (scheduled_to   is null or scheduled_to   >= now())`,
+      [campaign_id]
+    );
+    if (!ok.rows.length) return res.status(400).json({ error: "Campaign not eligible (not approved / out of window)" });
+
+    const validUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+
+    await pool.query(
+      `insert into display_overrides (display_id, campaign_id, valid_until)
+       values ($1,$2,$3)`,
+      [display_id, campaign_id, validUntil]
+    );
+
+    res.json({ ok: true, display_id, campaign_id, valid_until: validUntil });
+  } catch (e) {
+    console.error("[admin/send]", e);
+    res.status(500).json({ error: "Manual send failed" });
   }
 });
 
