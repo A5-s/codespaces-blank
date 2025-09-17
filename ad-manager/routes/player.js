@@ -22,22 +22,21 @@ router.get("/feed", async (req, res) => {
   };
 
   try {
-    const { rows: ovrRows } = await pool.query(
-      `
-      select do.display_id, do.campaign_id,
-             c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
-        from public.display_overrides do
-        join public.campaigns c on c.id = do.campaign_id
-       where do.display_id = $1
-         and do.valid_until >= now()
-         and c.status = 'approved'
-         and (c.scheduled_from is null or c.scheduled_from <= now())
-         and (c.scheduled_to   is null or c.scheduled_to   >= now())
-       order by do.valid_until desc
-       limit 1
-      `,
-      [display]
-    );
+const { rows: ovrRows } = await pool.query(
+  `
+  select do.display_id, do.campaign_id,
+         c.id, c.title, c.file_url, c.scheduled_from, c.scheduled_to
+    from public.display_overrides do
+    join public.campaigns c on c.id = do.campaign_id
+   where do.display_id = $1
+     and do.valid_until >= now()
+     and c.status = 'approved'
+   order by do.valid_until desc
+   limit 1
+  `,
+  [display]
+);
+
     const override = ovrRows[0] || null;
 
     const { rows } = await pool.query(
