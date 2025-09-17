@@ -245,14 +245,23 @@
         setMsg(msgEl, out.error || "Action failed", "bad");
         return;
       }
-      if (act === "send"){
-        setMsg(msgApproved, `Sent to Display ${out.display_id} for ~${Math.round((new Date(out.valid_until)-Date.now())/60000)}m`, "ok");
-      } else if (sections.pending.style.display !== "none") {
-        setMsg(msgPending, `${act}d`, "ok"); loadPending();
-      } else {
-        setMsg(msgApproved, `${act === "delete" ? "Removed" : act + "d"}`, "ok"); loadApproved();
-      }
-    });
+if (out && out.ok) {
+  setMsg(msgApproved, `Sent to Display ${out.display_id} for ~${Math.round((new Date(out.valid_until)-Date.now())/60000)}m`, "ok");
+
+  // If the admin viewer iframe is on that display, force reload it now.
+  const viewer = document.getElementById("viewer");
+  const labD = document.getElementById("labD"); // shows "Display N"
+  if (viewer && labD) {
+    const m = String(labD.textContent || "").match(/Display\s+(\d+)/i);
+    const current = m ? Number(m[1]) : 1;
+    if (current === Number(out.display_id)) {
+      // cache-bust the iframe to reload now
+      const u = new URL(viewer.src, location.href);
+      u.searchParams.set("t", Date.now().toString());
+      viewer.src = u.toString();
+    }
+  }
+}
 
     const modal = document.getElementById("imgModal");
     const modalImg = document.getElementById("modalImg");
