@@ -156,31 +156,40 @@ router.post("/:id/delete", requireAdmin, async (req, res) => {
 router.post("/send", requireAdmin, async (req, res) => {
   try {
     const campaign_id = Number(req.body.campaign_id);
-    const display_id = Number(req.body.display_id);
-    const minutes = Math.max(1, Math.min(60, Number(req.body.minutes || 10)));
+    const display_id  = Number(req.body.display_id);
+    const minutes     = Math.max(1, Math.min(60, Number(req.body.minutes || 10)));
+
+    if (!Number.isInteger(campaign_id) || ![1,2,3].includes(display_id)) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
 
     const ok = await pool.query(
-      `select 1 from campaigns
-        where id=$1 and status='approved'
+      `select id from public.campaigns
+        where id = $1
+          and status = 'approved'
           and (scheduled_from is null or scheduled_from <= now())
           and (scheduled_to   is null or scheduled_to   >= now())`,
       [campaign_id]
     );
-    if (!ok.rows.length) return res.status(400).json({ error: "Campaign not eligible (not approved / out of window)" });
+    if (!ok.rows.length) {
+      return res.status(400).json({ error: "Campaign not eligible (not approved / out of schedule)" });
+    }
 
     const validUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString();
 
     await pool.query(
-      `insert into display_overrides (display_id, campaign_id, valid_until)
+      `insert into public.display_overrides (display_id, campaign_id, valid_until)
        values ($1,$2,$3)`,
       [display_id, campaign_id, validUntil]
     );
 
-    res.json({ ok: true, display_id, campaign_id, valid_until: validUntil });
+    return res.json({ ok: true, display_id, campaign_id, valid_until: validUntil });
   } catch (e) {
-    console.error("[admin/send]", e);
-    res.status(500).json({ error: "Manual send failed" });
+    console.error("[admin/send] error:", e);
+    return res.status(500).json({ error: "manual_send_failed" });
   }
 });
+
+export default router;
 
 export default router;
